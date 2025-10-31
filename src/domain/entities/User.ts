@@ -1,76 +1,199 @@
-import { HashingService } from './../../infra/utils/hashingService/hashingService';
-import validator from "validator"; 
+import validator from 'validator';
+import { UserRoles } from "./enums/UserRoles";
+import { ProfilePicture } from "./media/ProfilePicture";
 
-export type UserProps = {
+export type UserType = {
     id: string;
+    userName: string;
     firstName: string;
-    lastName: string;
+    lastName: string
+    profilePicture?: ProfilePicture;
     email: string;
-    password: string;
+    passwordHash: string;
+    roles: UserRoles[];
     isBlocked: boolean;
-    lastLogin?: Date;
-    lastUpdate?: Date;
     createdAt: Date;
+    updatedAt?: Date;
+    lastLogin?: Date;
 }
 
-export class User {
-    private constructor(private props: UserProps) {}
+export class User{
+    private constructor(private readonly props: UserType) {}
 
-    public static async create(firstName: string, lastName: string, email: string, password: string, hashing: HashingService) {
-        if (!validator.isEmail(email)) {
-            throw new Error("Invalid E-mail");
+
+    public static create(userName: string, firstName: string, lastName: string, email: string, passwordHash: string, rolesArray: string[]){
+
+        //VALIDAÇÕES
+        if(!validator.isEmail(email)){
+            throw new Error("O email must be valid.")
+        }
+        if(validator.isEmpty(userName.trim())){
+            throw new Error("Username must not be empty.")
+        }
+        if(validator.isEmpty(firstName.trim())){
+            throw new Error("First Name must not be empty.")
         }
 
-        if (validator.isEmpty(firstName.trim())) {
-            throw new Error("First name cannot be empty");
+        //Criei o ID.
+        const id = crypto.randomUUID().toString()
+
+        //Conferi quais roles o usuário criado tem.
+        let roles: UserRoles[] = [UserRoles.USER];
+        if(rolesArray.includes("ADMIN")){
+            roles.push(UserRoles.ADMIN)
+        }
+        if(rolesArray.includes("GM")){
+            roles.push(UserRoles.GM)
         }
 
-        if (validator.isEmpty(lastName.trim())) {
-            throw new Error("Last name cannot be empty");
-        }
+        const isBlocked = false
+        const createdAt = new Date()
 
-        if (!validator.isLength(password, { min: 8 })) {
-            throw new Error("Password must be at least 8 characters long");
-        }
-
-        const hashedPassword = await hashing.hash(password);
-        const props: UserProps = {
-            id: crypto.randomUUID().toString(),
+        return new User({
+            id,
+            userName,
             firstName,
             lastName,
             email,
-            password: hashedPassword,
-            isBlocked: false,
-            createdAt: new Date(),
-        };
+            passwordHash,
+            roles,
+            isBlocked,
+            createdAt,
+        })      
+    }
+
+    public static fromPersistence(props: UserType): User {
         return new User(props);
     }
 
-    public static assemble(props: UserProps) {
-        return new User(props);
+    public static validatePassword(password: string): boolean {
+        if(validator.isStrongPassword(password, {
+            minLength: 8,
+            minLowercase: 1,
+            minUppercase: 1,
+            minNumbers: 1,
+            minSymbols: 1,
+        })){
+            return true
+        }
+        return false
     }
 
-    public getProps() {
-        return this.props;
+    public changeProfilePicture(profilePictureUrl: string): void {
+        this.props.profilePicture = ProfilePicture.create(profilePictureUrl);
+        this.touch()
     }
 
-    public async verifyPassword(password: string, hashing: HashingService): Promise<boolean> {
-        return hashing.compare(password, this.props.password);
+    public addRole(role: "GM" | "ADMIN"):boolean{
+        if(role === "GM"){
+            if(this.roles.includes(UserRoles.GM)){
+                return false
+            }
+            this.roles.push(UserRoles.GM)
+            this.touch()
+            return true
+        } else if(role === "ADMIN"){
+            if(this.roles.includes(UserRoles.ADMIN)){
+                return false
+            }
+            this.roles.push(UserRoles.ADMIN)
+            this.touch()
+            return true
+        }   else {
+            return false
+        }
+
     }
 
-    public async updatePassword(newPassword: string, hashing: HashingService): Promise<void> {
-        const hashedPassword = await hashing.hash(newPassword);
-        this.props.password = hashedPassword;
-        this.props.lastUpdate = new Date();
+    public removeRole(role: "GM" | "ADMIN"):boolean{
+        if(role==="GM"){
+            if(this.roles.includes(UserRoles.GM)){
+                const index = this.roles.findIndex(r => r===UserRoles.GM)
+                this.roles.splice(index, 1)
+                this.touch()
+                return true
+            }
+        }else if(role==="ADMIN"){
+            if(this.roles.includes(UserRoles.ADMIN)){
+                const index = this.roles.findIndex(r => r===UserRoles.ADMIN)
+                this.roles.splice(index, 1)
+                this.touch()
+                return true
+            }
+        }
+        return false
     }
 
-    public toggleBlockStatus(): void {
-        this.props.isBlocked = !this.props.isBlocked;
-        this.props.lastUpdate = new Date();
+    public toggleIsBlocked(){
+        this.isBlocked = !this.isBlocked
     }
 
-    public updateLastLogin(): void {
-        this.props.lastLogin = new Date();
+    public touch(){
+        this.updatedAt = new Date()
     }
 
+    //GETTERS
+
+    public get toPersistance(){
+        return this.props
+    }
+
+
+
+    public get id(): string {
+        return this.props.id;
+    }
+    public get userName(): string {
+        return this.props.userName;
+    }
+    public get firstName(): string {
+        return this.props.firstName;
+    }
+    public get lastName(): string {
+        return this.props.lastName;
+    }
+    public get fullName(): string {
+        return `${this.props.firstName} ${this.props.lastName}`;
+    }
+
+    public get profilePicture(): ProfilePicture | undefined {
+        return this.props.profilePicture;
+    }
+
+    public get email(): string {
+        return this.props.email;
+    }
+    public get passwordHash(): string {
+        return this.props.passwordHash;
+    }
+    public get roles(): UserRoles[] {
+        return this.props.roles;
+    }
+
+    public get isBlocked():boolean{
+        return this.props.isBlocked
+    }
+
+    public get createdAt(): Date {
+        return this.props.createdAt;
+    }
+
+    public get updatedAt(): Date | undefined {
+        return this.props.updatedAt;
+    }
+
+    public get lastLogin(): Date | undefined {
+        return this.props.lastLogin;
+    }
+
+
+    //SETTER
+
+    public set isBlocked(state: boolean){
+        this.props.isBlocked = state
+    }
+
+    public set updatedAt(newDate: Date){
+        this.props.updatedAt = newDate
+    }
 }
