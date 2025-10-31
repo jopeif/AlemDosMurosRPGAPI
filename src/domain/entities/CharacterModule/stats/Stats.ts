@@ -18,9 +18,18 @@ export class Stats{
         const knowledge = KnowledgeReserve.create(knowledgePoints)
 
         return new Stats({id, healthReserve, knowledge})
+    }
 
-        
+    public static fromPersistence(props:StatsProps):Stats{
+        return new Stats(props)
+    }
 
+    public toPersistence():StatsProps{
+        return this.props
+    }
+
+    public toJSON():StatsProps{
+        return this.props
     }
 
     public touch(){
